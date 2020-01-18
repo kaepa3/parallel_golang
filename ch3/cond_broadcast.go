@@ -31,5 +31,16 @@ func main() {
 		fmt.Println("Maximizeing window.")
 		clickRegistered.Done()
 	})
+	subscrive(button.Clicked, func() {
+		fmt.Println("Displaying annoying dialog box!")
+		clickRegistered.Done()
+	})
+	subscrive(button.Clicked, func() {
+		fmt.Println("Mouse clicked.!")
+		clickRegistered.Done()
+	})
+
+	button.Clicked.Broadcast()
+	clickRegistered.Wait()
 
 }
