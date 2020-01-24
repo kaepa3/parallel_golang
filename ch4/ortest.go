@@ -2,7 +2,8 @@ package main
 
 import (
 	"fmt"
-	"github.com/kaepa3/parallel_golang/ch4/common/or"
+	//"github.com/kaepa3/parallel_golang/ch4/common/or"
+	"./common"
 	"time"
 )
 
@@ -16,7 +17,7 @@ func main() {
 		return c
 	}
 	start := time.Now()
-	<-or.Or(
+	<-common.Or(
 		sig(2*time.Hour),
 		sig(2*time.Minute),
 		sig(1*time.Second),

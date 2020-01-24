@@ -1,4 +1,4 @@
-package or
+package common
 
 func Or(channels ...<-chan interface{}) <-chan interface{} {
 	switch len(channels) {
