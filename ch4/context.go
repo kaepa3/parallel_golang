@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -8,44 +9,46 @@ import (
 
 func main() {
 	var wg sync.WaitGroup
-	done := make(chan interface{})
-	defer close(done)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := printGreeting(done); err != nil {
+		if err := printGreeting(ctx); err != nil {
 			fmt.Printf("%v", err)
-			return
+			cancel()
 		}
 	}()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := printFarewell(done); err != nil {
+		if err := printFarewell(ctx); err != nil {
 			fmt.Printf("%v", err)
-			return
 		}
 	}()
 	wg.Wait()
 }
-func printGreeting(done <-chan interface{}) error {
-	greeting, err := genGreeting(done)
+func printGreeting(ctx context.Context) error {
+	greeting, err := genGreeting(ctx)
 	if err != nil {
 		return err
 	}
 	fmt.Printf("%s, world!\n", greeting)
 	return nil
 }
-func printFarewell(done <-chan interface{}) error {
-	farewell, err := genFarewell(done)
+func printFarewell(ctx context.Context) error {
+	farewell, err := genFarewell(ctx)
 	if err != nil {
 		return err
 	}
 	fmt.Printf("%s, world!\n", farewell)
 	return nil
 }
-func genGreeting(done <-chan interface{}) (string, error) {
-	switch locate, err := locate(done); {
+func genGreeting(ctx context.Context) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+
+	switch locate, err := locate(ctx); {
 	case err != nil:
 		return "", err
 	case locate == "EN/US":
@@ -54,8 +57,8 @@ func genGreeting(done <-chan interface{}) (string, error) {
 	}
 	return "", fmt.Errorf("unsupported locate")
 }
-func genFarewell(done <-chan interface{}) (string, error) {
-	switch locate, err := locate(done); {
+func genFarewell(ctx context.Context) (string, error) {
+	switch locate, err := locate(ctx); {
 	case err != nil:
 		return "", err
 
@@ -64,10 +67,15 @@ func genFarewell(done <-chan interface{}) (string, error) {
 	}
 	return "", fmt.Errorf("unsupported locate")
 }
-func locate(done <-chan interface{}) (string, error) {
+func locate(ctx context.Context) (string, error) {
+	if deadline, ok := ctx.Deadline(); ok {
+		if deadline.Sub(time.Now().Add(1*time.Minute)) <= 0 {
+			return "", context.DeadlineExceeded
+		}
+	}
 	select {
-	case <-done:
-		return "", fmt.Errorf("canceled")
+	case <-ctx.Done():
+		return "", ctx.Err()
 	case <-time.After(1 * time.Minute):
 		return "EN/US", nil
 	}
