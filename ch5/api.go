@@ -4,7 +4,9 @@ import (
 	"context"
 	"log"
 	"os"
+	"sort"
 	"sync"
+	"time"
 
 	"golang.org/x/time/rate"
 )
@@ -12,13 +14,18 @@ import (
 type Limit float64
 
 func Open() *APIConnection {
+	secondLimit := rate.NewLimiter(Per(2, time.Second), 1)   // <1>
+	minuteLimit := rate.NewLimiter(Per(10, time.Minute), 10) // <2>
 	return &APIConnection{
-		rateLimiter: rate.NewLimiter(rate.Limit(1), 1),
+		rateLimiter: MultiLimiter(secondLimit, minuteLimit), // <3>
 	}
+}
+func Per(eventCount int, duration time.Duration) rate.Limit {
+	return rate.Every(duration / time.Duration(eventCount))
 }
 
 type APIConnection struct {
-	rateLimiter *rate.Limiter
+	rateLimiter RateLimiter
 }
 
 func (a *APIConnection) ReadFile(ctx context.Context) error {
@@ -64,4 +71,36 @@ func main() {
 		}()
 	}
 	wg.Wait()
+}
+
+type RateLimiter interface { // <1>
+	Wait(context.Context) error
+	Limit() rate.Limit
+}
+
+func MultiLimiter(limiters ...RateLimiter) *multiLimiter {
+	byLimit := func(i, j int) bool {
+		return limiters[i].Limit() < limiters[j].Limit()
+	}
+	sort.Slice(limiters, byLimit)
+	return &multiLimiter{limiters: limiters}
+}
+
+type multiLimiter struct {
+	limiters []RateLimiter
+}
+
+func (l *multiLimiter) Wait(ctx context.Context) error {
+	for _, l := range l.limiters {
+		if err := l.Wait(ctx); err != nil {
+			return err
+		}
+
+	}
+
+	return nil
+}
+func (l *multiLimiter) Limit() rate.Limit {
+	return l.limiters[0].Limit()
+
 }
